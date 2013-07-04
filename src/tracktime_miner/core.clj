@@ -3,11 +3,12 @@
             [clojure.java.io :as io]
             [clojure.string :as str :refer [split]]))
 
-(def TASKS-FILE "/home/manuel/Sync/org/tasks.csv")
+(def TASKS-FILE (or (System/getenv "TASKS_FILE")
+                    "/home/manuel/Sync/org/tasks.csv"))
 
 ;; Possibile elaborare il tutto senza caricarlo in memoria? Oppure caricandolo progressivamente solo in parte, scartando le righe già elaborate?
 
-(defn- load-file
+(defn- load-csv
   "Load a CSV file in memory as a vector (file) of vectors (rows)."
   [path]
   (with-open [in-file (io/reader path)]
@@ -20,7 +21,7 @@
   (apply ->entry row))
 
 (defn read-entries [path]
-  (map make-entry (load-file path)))
+  (map make-entry (load-csv path)))
 
 (defn- start-date [entry]
   (first (split (:start entry) #" ")))
@@ -70,4 +71,17 @@ using `desc` as a substring to search their description."
   (into {} (for [[d m] (by-desc-day entries desc)]
              [d (minutes-for-day m)])))
 
-(sum-minutes (read-entries TASKS-FILE) "E3057")
+(defn- format-day [[day min]]
+  (str " * " day ": " min " minutes"))
+
+(defn report [filename desc]
+  (flatten (map (fn [[desc days-map]]
+                  [(str "# " desc " #")
+                   (flatten (map format-day days-map))])
+                (sum-minutes (read-entries filename) desc))))
+
+(defn -main [desc]
+  (->> desc
+       (report TASKS-FILE)
+       (clojure.string/join "\n")
+       (println)))
